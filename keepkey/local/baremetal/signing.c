@@ -67,29 +67,44 @@ enum {
 const uint32_t version = 1;
 const uint32_t lock_time = 0;
 
-/* === Private functions=========================================================== */
-static bool check_valid_output_address(TxOutputType *txout_ptr)
+/* === Private Functions =================================================== */
+
+/*
+ * check_valid_output_address() - Checks the sanity of an output
+ *
+ * INPUT
+ *     - stor_config: storage config
+ * OUTPUT
+ *     true/false status
+ *
+ */
+static bool check_valid_output_address(TxOutputType *tx_out)
 {
-    bool retval = false ; 
-    switch(txout_ptr->address_type)
+    bool ret_val = false;
+
+    switch(tx_out->address_type)
     {
-        case OutputAddressType_OutputAddressType_spend:
-            if(txout_ptr->has_address)
+        case OutputAddressType_SPEND:
+            if(tx_out->has_address)
             {
-                /*valid address type */
-                retval = true; 
+                /* valid address type */
+                ret_val = true;
             }
+
             break;
-        case OutputAddressType_OutputAddressType_transfer:
-        case OutputAddressType_OutputAddressType_change:
-            if(txout_ptr->address_n_count)
+
+        case OutputAddressType_TRANSFER:
+        case OutputAddressType_CHANGE:
+            if(tx_out->address_n_count > 0)
             {
-                /*valid address type */
-                retval = true; 
+                /* valid address type */
+                ret_val = true;
             }
+
             break;
     }
-    return(retval);
+
+    return(ret_val);
 }
 
 /* === Functions =========================================================== */
@@ -398,32 +413,22 @@ void signing_txack(TransactionType *tx)
 					is_change = true;
 				}
                         } else {
-
-                            if(tx->outputs[0].has_address_type)
-                            {
-                                if(check_valid_output_address(tx->outputs) == false)
-                                {
-                                    fsm_sendFailure(FailureType_Failure_Other, "Invalid output address detected");
+                            if(tx->outputs[0].has_address_type) {
+                                if(check_valid_output_address(tx->outputs) == false) {
+                                    fsm_sendFailure(FailureType_Failure_Other, "Invalid output address type");
                                     signing_abort();
                                     return;
                                 }
-                                if (tx->outputs[0].script_type == OutputScriptType_PAYTOADDRESS && 
-                                        tx->outputs[0].address_n_count > 0) 
-                                {
-                                    if(tx->outputs[0].address_type == OutputAddressType_OutputAddressType_change)
-                                    {
-                                        is_change = true;
-                                    }
-                                }
-                            }
-                            else
-                            {
-                                /* path to handle backward compatibility with older client interface */
-                                if (tx->outputs[0].script_type == OutputScriptType_PAYTOADDRESS &&
-			                      tx->outputs[0].address_n_count > 0) 
-                                {
+
+                                if(tx->outputs[0].script_type == OutputScriptType_PAYTOADDRESS &&
+                                        tx->outputs[0].address_n_count > 0 &&
+                                        tx->outputs[0].address_type == OutputAddressType_CHANGE) {
                                     is_change = true;
                                 }
+                            }
+                            else if(tx->outputs[0].script_type == OutputScriptType_PAYTOADDRESS &&
+                                    tx->outputs[0].address_n_count > 0) {
+                                is_change = true;
                             }
                         }
 
@@ -470,13 +475,12 @@ void signing_txack(TransactionType *tx)
 
 		        coin_amnt_to_str(coin, fee, fee_str, sizeof(fee_str));
 
-                        if (fee > (uint64_t)tx_est_size * coin->maxfee_kb) {
-					if (!confirm(ButtonRequestType_ButtonRequest_FeeOverThreshold,
-		              "Confirm Fee", "%s", fee_str))
-		            {
-		              fsm_sendFailure(FailureType_Failure_ActionCancelled, "Fee over threshold. Signing cancelled.");
-		              go_home();
-		              return;
+                            if(fee > (uint64_t)tx_est_size * coin->maxfee_kb) {
+			        if (!confirm(ButtonRequestType_ButtonRequest_FeeOverThreshold,
+		                        "Confirm Fee", "%s", fee_str)) {
+		                    fsm_sendFailure(FailureType_Failure_ActionCancelled, "Fee over threshold. Signing cancelled.");
+		                    go_home();
+		                    return;
 		            }
                             animating_progress_handler();
                         }

@@ -35,34 +35,50 @@
 #include "crypto.h"
 #include "app_confirm.h"
 
-/* === Private Variables =================================================== */
-static void node_hex_to_string(ButtonRequestType *bt_type, char * address_n_str, TxOutputType *TxOut)
+/* === Private Functions =================================================== */
+
+/*
+ * node_hex_to_string() - Formats node hex value to readable string
+ *
+ * INPUT
+ *     - button_type: button request type to be set
+ *     - node_str: human readable node string
+ *     - TxOut: transaction output
+ * OUTPUT
+ *     none
+ *
+ */
+static void node_hex_to_string(ButtonRequestType *button_type, char *node_str,
+                                     TxOutputType *TxOut)
 {
     size_t i;
-    char temp_bfr[15];
+    char temp_buffer[15];
 
     if(TxOut->address_n[0] == 0x8000002C && TxOut->address_n[1] == 0x80000000)
     {
         /* node starts with /44'/0'  */
-        snprintf(address_n_str, BODY_CHAR_MAX, "Account #%lu", TxOut->address_n[2] & 0x7ffffff);
-        *bt_type = ButtonRequestType_ButtonRequest_ConfirmTransferToAccount;
+        snprintf(node_str, BODY_CHAR_MAX, "Account #%lu", TxOut->address_n[2] & 0x7ffffff);
+        *button_type = ButtonRequestType_ButtonRequest_ConfirmTransferToAccount;
     }
     else
     {
-        snprintf(address_n_str, BODY_CHAR_MAX, "Node path : m");
+        snprintf(node_str, BODY_CHAR_MAX, "Node path : m");
+
         for(i = 0; i < TxOut->address_n_count; i++)
         {
             if(TxOut->address_n[i] & 0x80000000)
             {
-                snprintf(temp_bfr, sizeof(temp_bfr), "/%lu\'", TxOut->address_n[i] & 0x7ffffff);
+                snprintf(temp_buffer, sizeof(temp_buffer), "/%lu\'", TxOut->address_n[i] & 0x7ffffff);
             }
             else
             {
-                snprintf(temp_bfr, sizeof(temp_bfr), "/%lu", TxOut->address_n[i] & 0x7ffffff);
+                snprintf(temp_buffer, sizeof(temp_buffer), "/%lu", TxOut->address_n[i] & 0x7ffffff);
             }
-            strncat(address_n_str, temp_bfr, sizeof(temp_bfr));
+
+            strncat(node_str, temp_buffer, sizeof(temp_buffer));
         }
-        *bt_type = ButtonRequestType_ButtonRequest_ConfirmTransferToNodePath;
+
+        *button_type = ButtonRequestType_ButtonRequest_ConfirmTransferToNodePath;
     }
 }
 
@@ -98,8 +114,8 @@ int compile_output(const CoinType *coin, const HDNode *root, TxOutputType *in, T
 	out->amount = in->amount;
 	uint8_t addr_raw[21];
 	char amount_str[32];
-	char node_addr_str[40];
-	ButtonRequestType bt_req_type;
+	char node_str[40];
+	ButtonRequestType button_request;
 
 	if (in->script_type == OutputScriptType_PAYTOADDRESS) {
 
@@ -108,9 +124,9 @@ int compile_output(const CoinType *coin, const HDNode *root, TxOutputType *in, T
 			/* user confirmation for pay to node path */
 			if (needs_confirm) {
 				coin_amnt_to_str(coin, in->amount, amount_str, sizeof(amount_str));
-				memset(node_addr_str, 0, sizeof(node_addr_str));
-				node_hex_to_string(&bt_req_type, node_addr_str, in);
-				if(!confirm_transaction_output(bt_req_type, amount_str, node_addr_str))
+				memset(node_str, 0, sizeof(node_str));
+				node_hex_to_string(&button_request, node_str, in);
+				if(!confirm_transaction_output(button_request, amount_str, node_str))
 				{
 					return -1;
 				}
